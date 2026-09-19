@@ -8,6 +8,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100%;
+        }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
         input, select { font-size: 14px !important; color: #000 !important; }
         input[type="number"]::-webkit-outer-spin-button,
@@ -214,16 +219,16 @@ function changeCount(btn, amount) {
 
 function addFutaiRow(selectedVal = "") {
     let options = futaiOptions.map(o => `<option value="${o}" ${o === selectedVal ? "selected" : ""}>${o}</option>`).join('');
-    document.getElementById('futai-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center"><select class="border rounded py-0.5 w-24 bg-white">${options}</select><input type="text" placeholder="メモ" class="flex-1 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action">×</button></div> `);
+    document.getElementById('futai-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center min-w-0"><select class="border rounded py-0.5 w-24 bg-white shrink-0">${options}</select><input type="text" placeholder="メモ" class="flex-1 min-w-0 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action shrink-0">×</button></div> `);
 }
 
 function addRicchiRow() {
     let options = ricchiOptions.map(o => `<option value="${o}">${o}</option>`).join('');
-    document.getElementById('ricchi-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center"><select class="border rounded py-0.5 w-24 bg-white">${options}</select><input type="text" placeholder="状況等" class="flex-1 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action">×</button></div> `);
+    document.getElementById('ricchi-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center min-w-0"><select class="border rounded py-0.5 w-24 bg-white shrink-0">${options}</select><input type="text" placeholder="状況等" class="flex-1 min-w-0 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action shrink-0">×</button></div> `);
 }
 
 function addMemoRow() {
-    document.getElementById('memo-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center"><input type="text" placeholder="メモ内容を入力" class="flex-1 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action">×</button></div> `);
+    document.getElementById('memo-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center min-w-0"><input type="text" placeholder="メモ内容を入力" class="flex-1 min-w-0 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action shrink-0">×</button></div> `);
 }
 
 function calculateAll() {
@@ -357,21 +362,19 @@ async function generateAndSharePdf() {
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
-        const imgWidthMm = pageWidth;
-        const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-        let heightLeft = imgHeightMm;
-        let position = 0;
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm);
-        heightLeft -= pageHeight;
-
-        while (heightLeft > 0) {
-            position = heightLeft - imgHeightMm;
-            pdf.addPage();
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm);
-            heightLeft -= pageHeight;
+        // 常にA4用紙1枚に収まるよう、縦横比を保ったまま自動縮小する
+        let imgWidthMm = pageWidth;
+        let imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
+        if (imgHeightMm > pageHeight) {
+            const shrink = pageHeight / imgHeightMm;
+            imgHeightMm = pageHeight;
+            imgWidthMm = imgWidthMm * shrink;
         }
+        const xOffset = (pageWidth - imgWidthMm) / 2;
+        const yOffset = (pageHeight - imgHeightMm) / 2;
+        pdf.addImage(imgData, 'JPEG', xOffset, yOffset, imgWidthMm, imgHeightMm);
 
         const name = document.getElementById('client-name').value || '計測用紙';
         const filename = sanitizeFilename(name + '_検査表') + '.pdf';
