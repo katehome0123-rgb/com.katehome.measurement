@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>計測用紙アプリ</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        input, select { font-size: 14px !important; color: #000 !important; }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+
+        /* 通常のスマホ画面での入力スクロールエリア */
+        #input-scroll-area {
+            max-height: 64vh;
+            overflow-y: auto;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-100 p-2 text-xs select-none">
+
+<div id="pdf-container-outer" class="w-full max-w-md mx-auto">
+    <div id="pdf-content" class="bg-white p-3 rounded shadow-sm w-full">
+        <div id="pdf-inner-layout">
+            <div class="text-center border-b border-black pb-1 mb-2">
+                <h1 class="text-base font-bold tracking-widest">検 査 表</h1>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1 border-b border-gray-300 pb-1 mb-2">
+                <div><label class="block text-[10px] text-gray-500">邸名</label><input type="text" id="client-name" class="w-full border border-gray-300 rounded px-1 py-0.5 bg-white"></div>
+                <div><label class="block text-[10px] text-gray-500">TEL</label><input type="tel" id="client-tel" class="w-full border border-gray-300 rounded px-1 py-0.5 bg-white"></div>
+                <div><label class="block text-[10px] text-gray-500">住所</label><input type="text" id="client-address" class="w-full border border-gray-300 rounded px-1 py-0.5 bg-white"></div>
+            </div>
+
+            <div class="grid grid-cols-4 gap-1 border-b border-gray-300 pb-1 mb-2">
+                <div><label class="block text-[10px] text-gray-500">築年数</label><input type="number" id="building-age" class="w-full border border-gray-300 rounded px-1 py-0.5 bg-white"></div>
+                <div><label class="block text-[10px] text-gray-500">階数</label><input type="number" id="building-floors" class="w-full border border-gray-300 rounded px-1 py-0.5 bg-white"></div>
+                <div>
+                    <label class="block text-[10px] text-gray-500">屋根材</label>
+                    <select id="roof-material" class="w-full border border-gray-300 rounded py-0.5 bg-white">
+                        <option value="スレート">スレート</option>
+                        <option value="ガルバ">ガルバ</option>
+                        <option value="パミール">パミール</option>
+                        <option value="アスファルトシングル">アスファルトシングル</option>
+                        <option value="Neo">Neo</option>
+                        <option value="瓦">瓦</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] text-gray-500">外壁材</label>
+                    <select id="wall-material" class="w-full border border-gray-300 rounded py-0.5 bg-white">
+                        <option value="サイディング">サイディング</option><option value="リシン">リシン</option><option value="ジョリパ">ジョリパ</option>
+                        <option value="スタッコ">スタッコ</option><option value="ボンタイル">ボンタイル</option><option value="ALC">ALC</option><option value="タイル">タイル</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1 border-b border-gray-300 pb-1 mb-2">
+                <div>
+                    <label class="block text-[10px] text-gray-500">防水材</label>
+                    <select id="waterproof-material" onchange="calculateAll()" class="w-full border border-gray-300 rounded py-0.5 bg-white">
+                        <option value="FRP">FRP</option><option value="ウレタン">ウレタン</option><option value="コンクリ">コンクリ</option><option value="シート">シート</option>
+                    </select>
+                </div>
+                <div><label class="block text-[10px] text-gray-500">波板(尺)</label><input type="number" id="nami-shaku" class="w-full border border-gray-300 rounded px-1 py-0.5 bg-white"></div>
+                <div><label class="block text-[10px] text-gray-500">波板(枚)</label><input type="number" id="nami-mai" class="w-full border border-gray-300 rounded px-1 py-0.5 bg-white"></div>
+            </div>
+
+            <div class="flex gap-2 items-start">
+                <div class="w-24 bg-gray-50 border border-gray-300 rounded p-1 flex flex-col justify-between font-bold text-gray-700 space-y-0.5 shrink-0">
+                    <div class="flex justify-between border-b border-gray-200 py-0.5"><span>実:</span><div><span id="summary-jitsu">0</span><span class="text-[9px] font-normal">㎡</span></div></div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5"><span>足:</span><div><span id="summary-ashi">0</span><span class="text-[9px] font-normal">㎡</span></div></div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5"><span>開:</span><div><span id="summary-kai">0</span><span class="text-[9px] font-normal">㎡</span></div></div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5"><span>ベ:</span><div><span id="summary-be">0</span><span class="text-[9px] font-normal">㎡</span></div></div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5"><span>打:</span><div><span id="summary-uchi">0</span><span class="text-[9px] font-normal">m</span></div></div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5"><span>増:</span><div><span id="summary-zou">0</span><span class="text-[9px] font-normal">m</span></div></div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5"><span>屋:</span><div><span id="summary-ya">0</span><span class="text-[9px] font-normal">㎡</span></div></div>
+                    <div class="flex flex-col border-b border-gray-200 py-0.5">
+                        <span class="text-[9px] text-gray-500 font-normal">屋足</span>
+                        <input type="number" id="input-yaashi" value="0" oninput="calculateAll()" class="w-full text-right border border-gray-300 rounded px-1 py-0 bg-white">
+                    </div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5 text-blue-600"><span>塗:</span><div><span id="summary-turi">0</span><span class="text-[9px] font-normal">㎡</span></div></div>
+                    <div class="flex justify-between border-b border-gray-200 py-0.5 text-indigo-600"><span>防:</span><div><span id="summary-bou">0</span><span class="text-[9px] font-normal">㎡</span></div></div>
+                    
+                    <div class="flex flex-col border-b border-gray-200 py-0.5">
+                        <span class="text-[9px] text-gray-500 font-normal">棟(m)</span>
+                        <input type="number" id="input-mune" value="0" class="w-full text-right border border-gray-300 rounded px-1 py-0 bg-white">
+                    </div>
+                    <div class="flex flex-col border-b border-gray-200 py-0.5">
+                        <span class="text-[9px] text-gray-500 font-normal">水切(m)</span>
+                        <input type="number" id="input-mizukiri" value="0" class="w-full text-right border border-gray-300 rounded px-1 py-0 bg-white">
+                    </div>
+                    <div class="flex flex-col py-0.5">
+                        <span class="text-[9px] text-gray-500 font-normal">ケラバ(m)</span>
+                        <input type="number" id="input-keraba" value="0" class="w-full text-right border border-gray-300 rounded px-1 py-0 bg-white">
+                    </div>
+                </div>
+
+                <div class="flex-1 space-y-2" id="input-scroll-area">
+                    <div class="bg-amber-50 p-1 rounded border border-amber-200">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-amber-900">外壁</span><button onclick="addRow('wall-tbody', 1)" class="bg-amber-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <table class="w-full text-center"><thead class="bg-amber-100"><tr><th>横</th><th>奥</th><th>高</th><th>㎡</th><th class="btn-action"></th></tr></thead><tbody id="wall-tbody"></tbody></table>
+                    </div>
+
+                    <div class="bg-blue-50 p-1 rounded border border-blue-200">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-blue-900">ベランダ</span><button onclick="addRow('veranda-tbody', 2)" class="bg-blue-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <table class="w-full text-center"><thead class="bg-blue-100"><tr><th>幅</th><th>奥</th><th>高</th><th>㎡</th><th class="btn-action"></th></tr></thead><tbody id="veranda-tbody"></tbody></table>
+                    </div>
+
+                    <div class="bg-green-50 p-1 rounded border border-green-200">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-green-900">屋根</span><button onclick="addRow('roof-tbody', 3)" class="bg-green-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <table class="w-full text-center"><thead class="bg-green-100"><tr><th>縦</th><th>横</th><th>勾配</th><th>㎡</th><th class="btn-action"></th></tr></thead><tbody id="roof-tbody"></tbody></table>
+                    </div>
+
+                    <div class="bg-red-50 p-1 rounded border border-red-200">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-red-900">窓</span><button onclick="addRow('window-tbody', 5)" class="bg-red-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <table class="w-full text-center text-[11px]"><thead class="bg-red-100"><tr><th>横</th><th>縦</th><th class="w-16">個数</th><th>㎡</th><th>m</th><th class="btn-action"></th></tr></thead><tbody id="window-tbody"></tbody></table>
+                    </div>
+
+                    <div class="bg-purple-50 p-1 rounded border border-purple-200">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-purple-900">目地</span><button onclick="addRow('meji-tbody', 6)" class="bg-purple-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <table class="w-full text-center"><thead class="bg-purple-100"><tr><th>m</th><th class="w-16">本数</th><th>計m</th><th class="btn-action"></th></tr></thead><tbody id="meji-tbody"></tbody></table>
+                    </div>
+
+                    <div class="bg-teal-50 p-1 rounded border border-teal-200">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-teal-900">増打</span><button onclick="addRow('mashi-tbody', 7)" class="bg-teal-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <table class="w-full text-center"><thead class="bg-teal-100"><tr><th>m</th><th class="w-16">本数</th><th>計m</th><th class="btn-action"></th></tr></thead><tbody id="mashi-tbody"></tbody></table>
+                    </div>
+
+                    <div class="bg-gray-50 p-1 rounded border border-gray-300">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-gray-700">付帯部</span><button onclick="addFutaiRow()" class="bg-gray-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <div id="futai-container" class="space-y-1"></div>
+                    </div>
+
+                    <div class="bg-stone-50 p-1 rounded border border-stone-300">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-stone-700">立地条件</span><button onclick="addRicchiRow()" class="bg-stone-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <div id="ricchi-container" class="space-y-1"></div>
+                    </div>
+
+                    <div class="bg-slate-50 p-1 rounded border border-slate-300">
+                        <div class="flex justify-between items-center mb-1"><span class="font-bold text-slate-700">メモ欄</span><button onclick="addMemoRow()" class="bg-slate-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold btn-action">+追加</button></div>
+                        <div id="memo-container" class="space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="action-area" class="w-full max-w-md mt-2 p-1 flex justify-center mx-auto mb-8">
+    <button id="sendBtn" onclick="generateAndSharePdf()" class="w-full bg-emerald-600 active:bg-emerald-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-md tracking-wider flex items-center justify-center gap-2">
+        📄 完了！LINE・メールにPDFを送信する
+    </button>
+</div>
+
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:bold;z-index:50;opacity:0;transition:opacity 0.25s;pointer-events:none;"></div>
+
+<script>
+const futaiOptions = ["竪樋", "軒樋", "破風板", "軒天", "水切り", "シャッターBOX", "塩ビ", "雨戸戸袋", "帯", "換気", "笠木", "手摺", "庇", "天板", "飾り板", "鉄扉", "門扉", "門柱", "鉄柱"];
+const ricchiOptions = ["車", "越境", "道路使用", "道路占用", "ガードマン", "フェンス", "屋根足場"];
+
+window.onload = function() {
+    for(let i=0; i<3; i++) addRow('wall-tbody', 1);
+    for(let i=0; i<2; i++) addRow('veranda-tbody', 2);
+    for(let i=0; i<2; i++) addRow('roof-tbody', 3);
+    for(let i=0; i<4; i++) addRow('window-tbody', 5);
+    for(let i=0; i<2; i++) addRow('meji-tbody', 6);
+    for(let i=0; i<2; i++) addRow('mashi-tbody', 7);
+    const defaultFutai = ["竪樋", "軒樋", "破風板", "軒天", "水切り"];
+    defaultFutai.forEach(val => addFutaiRow(val));
+    addRicchiRow();
+    addMemoRow();
+}
+
+function removeRow(btn) {
+    btn.closest('tr')?.remove() || btn.closest('.flex-row-item')?.remove();
+    calculateAll();
+}
+
+function addRow(tbodyId, type) {
+    const tbody = document.getElementById(tbodyId);
+    const tr = document.createElement('tr');
+    tr.className = "border-b border-gray-200";
+    let html = '';
+    if (type === 1) {
+        html = `<td><input type="number" step="0.01" class="w-10 border text-center val-x" oninput="calculateAll()"></td> <td><input type="number" step="0.01" class="w-10 border text-center val-y" oninput="calculateAll()"></td> <td><input type="number" step="0.01" class="w-10 border text-center val-h" oninput="calculateAll()"></td> <td class="w-12 ans-m2 font-bold">0</td>`;
+    } else if (type === 2) {
+        html = `<td><input type="number" step="0.01" class="w-10 border text-center val-w" oninput="calculateAll()"></td> <td><input type="number" step="0.01" class="w-10 border text-center val-d" oninput="calculateAll()"></td> <td><input type="number" step="0.01" class="w-10 border text-center val-h" oninput="calculateAll()"></td> <td class="w-12 ans-m2 font-bold">0</td>`;
+    } else if (type === 3) {
+        html = `<td><input type="number" step="0.01" class="w-10 border text-center val-t" oninput="calculateAll()"></td> <td><input type="number" step="0.01" class="w-10 border text-center val-y" oninput="calculateAll()"></td> <td><input type="number" step="0.01" class="w-10 border text-center val-k" oninput="calculateAll()"></td> <td class="w-12 ans-m2 font-bold">0</td>`;
+    } else if (type === 5) {
+        html = `<td><input type="number" step="0.01" class="w-9 border text-center val-w" oninput="calculateAll()"></td> <td><input type="number" step="0.01" class="w-9 border text-center val-h" oninput="calculateAll()"></td> <td> <div class="flex items-center justify-center gap-0.5"> <button onclick="changeCount(this, -1)" class="bg-gray-200 px-1 rounded font-bold text-xs btn-action">-</button> <span class="val-count font-bold w-4">0</span> <button onclick="changeCount(this, 1)" class="bg-gray-200 px-1 rounded font-bold text-xs btn-action">+</button> </div> </td> <td class="ans-m2 font-bold">0</td><td class="ans-m font-bold">0</td>`;
+    } else if (type === 6 || type === 7) {
+        html = `<td><input type="number" step="0.01" class="w-12 border text-center val-m" oninput="calculateAll()"></td> <td> <div class="flex items-center justify-center gap-0.5"> <button onclick="changeCount(this, -1)" class="bg-gray-200 px-1 rounded font-bold text-xs btn-action">-</button> <span class="val-count font-bold w-4">0</span> <button onclick="changeCount(this, 1)" class="bg-gray-200 px-1 rounded font-bold text-xs btn-action">+</button> </div> </td> <td class="ans-total-m font-bold">0</td>`;
+    }
+    html += `<td class="btn-action"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1">×</button></td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+    calculateAll();
+}
+
+function changeCount(btn, amount) {
+    const span = btn.parentElement.querySelector('.val-count');
+    let current = parseInt(span.innerText) || 0;
+    current = Math.max(0, current + amount);
+    span.innerText = current;
+    calculateAll();
+}
+
+function addFutaiRow(selectedVal = "") {
+    let options = futaiOptions.map(o => `<option value="${o}" ${o === selectedVal ? "selected" : ""}>${o}</option>`).join('');
+    document.getElementById('futai-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center"><select class="border rounded py-0.5 w-24 bg-white">${options}</select><input type="text" placeholder="メモ" class="flex-1 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action">×</button></div> `);
+}
+
+function addRicchiRow() {
+    let options = ricchiOptions.map(o => `<option value="${o}">${o}</option>`).join('');
+    document.getElementById('ricchi-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center"><select class="border rounded py-0.5 w-24 bg-white">${options}</select><input type="text" placeholder="状況等" class="flex-1 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action">×</button></div> `);
+}
+
+function addMemoRow() {
+    document.getElementById('memo-container').insertAdjacentHTML('beforeend', ` <div class="flex-row-item flex gap-1 items-center"><input type="text" placeholder="メモ内容を入力" class="flex-1 border rounded px-1 py-0.5 bg-white"><button onclick="removeRow(this)" class="text-red-500 font-bold px-1 btn-action">×</button></div> `);
+}
+
+function calculateAll() {
+    let totalJitsu = 0, totalKai = 0, totalBe = 0, totalUchi = 0, totalMadoM = 0, totalMashiM = 0, totalYa = 0, totalBousui = 0;
+    
+    document.querySelectorAll('#wall-tbody tr').forEach(tr => {
+        const x = parseFloat(tr.querySelector('.val-x').value) || 0;
+        const y = parseFloat(tr.querySelector('.val-y').value) || 0;
+        const h = parseFloat(tr.querySelector('.val-h').value) || 0;
+        const m2 = ((x + y) * 2) * h;
+        tr.querySelector('.ans-m2').innerText = m2.toFixed(2);
+        totalJitsu += m2;
+    });
+
+    const wpMaterial = document.getElementById('waterproof-material').value;
+    document.querySelectorAll('#veranda-tbody tr').forEach(tr => {
+        const w = parseFloat(tr.querySelector('.val-w').value) || 0;
+        const d = parseFloat(tr.querySelector('.val-d').value) || 0;
+        const h = parseFloat(tr.querySelector('.val-h').value) || 0;
+        const m2 = (w + d) * h;
+        tr.querySelector('.ans-m2').innerText = m2.toFixed(2);
+        totalBe += m2;
+        let bousuiRow = 0;
+        if (wpMaterial === "コンクリ") {
+            bousuiRow = w * d;
+        } else {
+            bousuiRow = (w * d) + ((w + d) * 0.3);
+        }
+        totalBousui += bousuiRow;
+    });
+
+    document.querySelectorAll('#roof-tbody tr').forEach(tr => {
+        const t = parseFloat(tr.querySelector('.val-t').value) || 0;
+        const y = parseFloat(tr.querySelector('.val-y').value) || 0;
+        const k = parseFloat(tr.querySelector('.val-k').value) || 0;
+        const m2 = (t * y) * k;
+        tr.querySelector('.ans-m2').innerText = m2.toFixed(2);
+        totalYa += m2;
+    });
+
+    document.querySelectorAll('#window-tbody tr').forEach(tr => {
+        const w = parseFloat(tr.querySelector('.val-w').value) || 0;
+        const h = parseFloat(tr.querySelector('.val-h').value) || 0;
+        const count = parseInt(tr.querySelector('.val-count').innerText) || 0;
+        const m2 = (w * h) * count;
+        const m = ((w + h) * 2) * count;
+        tr.querySelector('.ans-m2').innerText = m2.toFixed(2);
+        tr.querySelector('.ans-m').innerText = m.toFixed(2);
+        totalKai += m2;
+        totalMadoM += m;
+    });
+
+    document.querySelectorAll('#meji-tbody tr').forEach(tr => {
+        const m = parseFloat(tr.querySelector('.val-m').value) || 0;
+        const num = parseInt(tr.querySelector('.val-count').innerText) || 0;
+        const total = m * num;
+        tr.querySelector('.ans-total-m').innerText = total.toFixed(2);
+        totalUchi += total;
+    });
+
+    document.querySelectorAll('#mashi-tbody tr').forEach(tr => {
+        const m = parseFloat(tr.querySelector('.val-m').value) || 0;
+        const num = parseInt(tr.querySelector('.val-count').innerText) || 0;
+        const total = m * num;
+        tr.querySelector('.ans-total-m').innerText = total.toFixed(2);
+        totalMashiM += total;
+    });
+
+    document.getElementById('summary-jitsu').innerText = totalJitsu.toFixed(2);
+    document.getElementById('summary-ashi').innerText = (totalJitsu * 1.1).toFixed(2);
+    document.getElementById('summary-kai').innerText = totalKai.toFixed(2);
+    document.getElementById('summary-be').innerText = totalBe.toFixed(2);
+    document.getElementById('summary-uchi').innerText = totalUchi.toFixed(2);
+    document.getElementById('summary-zou').innerText = (totalMadoM + totalMashiM).toFixed(2);
+    document.getElementById('summary-ya').innerText = totalYa.toFixed(2);
+    document.getElementById('summary-turi').innerText = (totalJitsu - totalKai + totalBe).toFixed(2);
+    document.getElementById('summary-bou').innerText = totalBousui.toFixed(2);
+}
+
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.opacity = '1';
+    setTimeout(() => { t.style.opacity = '0'; }, 2200);
+}
+
+function isNativeApp() {
+    return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+}
+
+function sanitizeFilename(name) {
+    return name.replace(/[\\/:*?"<>|]/g, '_');
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+// 行数がどれだけ増えても自動でPDFを複数ページに割り振り、その場でLINE等に直接共有する
+async function generateAndSharePdf() {
+    const sendBtn = document.getElementById('sendBtn');
+    sendBtn.disabled = true;
+    sendBtn.innerText = 'PDFを作成中...';
+
+    try {
+        const element = document.getElementById('pdf-content');
+        const scrollArea = document.getElementById('input-scroll-area');
+        const originalMaxHeight = scrollArea.style.maxHeight;
+        const originalOverflow = scrollArea.style.overflow;
+
+        // 内容をすべて撮影できるよう、一時的にスクロール制限を解除
+        scrollArea.style.maxHeight = 'none';
+        scrollArea.style.overflow = 'visible';
+        document.querySelectorAll('.btn-action').forEach(el => el.style.visibility = 'hidden');
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: true });
+
+        // 元の表示状態に戻す
+        document.querySelectorAll('.btn-action').forEach(el => el.style.visibility = '');
+        scrollArea.style.maxHeight = originalMaxHeight;
+        scrollArea.style.overflow = originalOverflow;
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgWidthMm = pageWidth;
+        const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+        let heightLeft = imgHeightMm;
+        let position = 0;
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+            position = heightLeft - imgHeightMm;
+            pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm);
+            heightLeft -= pageHeight;
+        }
+
+        const name = document.getElementById('client-name').value || '計測用紙';
+        const filename = sanitizeFilename(name + '_検査表') + '.pdf';
+        const blob = pdf.output('blob');
+
+        if (isNativeApp()) {
+            const base64Data = await blobToBase64(blob);
+            const writeResult = await Capacitor.Plugins.Filesystem.writeFile({
+                path: filename,
+                data: base64Data,
+                directory: 'CACHE'
+            });
+            await Capacitor.Plugins.Share.share({
+                title: filename,
+                text: name + '様の検査表です。',
+                url: writeResult.uri,
+                dialogTitle: '検査表を共有'
+            });
+        } else {
+            const file = new File([blob], filename, { type: 'application/pdf' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: filename, text: name + '様の検査表です。' });
+            } else {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                showToast('PDFをダウンロードしました');
+            }
+        }
+    } catch (e) {
+        showToast('PDFの作成に失敗しました');
+    }
+
+    sendBtn.disabled = false;
+    sendBtn.innerText = '📄 完了！LINE・メールにPDFを送信する';
+}
+</script>
+</body>
+</html>
